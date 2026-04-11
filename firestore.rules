@@ -1,0 +1,142 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: tenants
+    // Fields: name (string), plan (string), createdAt (timestamp), stripeCustomerId (string)
+    //
+    // Collection: users
+    // Fields: email (string), tenantId (string), role (string), displayName (string), photoURL (string)
+    //
+    // Collection: clients
+    // Fields: tenantId (string), name (string), industry (string), email (string)
+    //
+    // Collection: jobs
+    // Fields: tenantId (string), type (string), status (string), input (map), result (map), createdAt (timestamp)
+    //
+    // Collection: content
+    // Fields: tenantId (string), type (string), data (map), createdAt (timestamp)
+    //
+    // Collection: notifications
+    // Fields: userId (string), title (string), message (string), type (string), read (bool), createdAt (timestamp)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isTenantMember(tenantId) {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().tenantId == tenantId;
+    }
+
+    function isTenantAdmin(tenantId) {
+      return isTenantMember(tenantId) && getUserData().role == 'admin';
+    }
+
+    function isTenantManager(tenantId) {
+      return isTenantMember(tenantId) && (getUserData().role == 'admin' || getUserData().role == 'manager');
+    }
+
+    function isAdmin() {
+      let isHardcodedAdmin = request.auth.token.email == "alqaid694@gmail.com" && request.auth.token.email_verified == true;
+      return isAuthenticated() && (
+        isHardcodedAdmin || 
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'admin')
+      );
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidUser(data) {
+      return data.email is string && 
+             data.tenantId is string && 
+             data.role in ['admin', 'manager', 'user'];
+    }
+
+    function isValidNotification(data) {
+      return data.userId is string && 
+             data.title is string && data.title.size() < 100 &&
+             data.message is string && data.message.size() < 500 &&
+             data.type in ['info', 'success', 'warning', 'error'] &&
+             data.read is bool;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isTenantMember(resource.data.tenantId));
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
+                    (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role) || 
+        isAdmin()
+      );
+    }
+
+    // Tenants collection
+    match /tenants/{tenantId} {
+      allow read: if isTenantMember(tenantId) || isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Clients collection
+    match /clients/{clientId} {
+      allow read: if isTenantMember(resource.data.tenantId) || isAdmin();
+      allow create: if isTenantMember(request.resource.data.tenantId) && 
+                    hasOnlyAllowedFields(['tenantId', 'name', 'industry', 'email']);
+      allow update, delete: if isTenantManager(resource.data.tenantId) || isAdmin();
+    }
+
+    // Jobs collection
+    match /jobs/{jobId} {
+      allow read: if isTenantMember(resource.data.tenantId) || isAdmin();
+      allow create: if isTenantMember(request.resource.data.tenantId);
+      allow update: if isTenantMember(resource.data.tenantId) || isAdmin();
+      allow delete: if isTenantAdmin(resource.data.tenantId) || isAdmin();
+    }
+
+    // Content collection
+    match /content/{contentId} {
+      allow read: if isTenantMember(resource.data.tenantId) || isAdmin();
+      allow create: if isTenantMember(request.resource.data.tenantId);
+      allow update, delete: if isTenantAdmin(resource.data.tenantId) || isAdmin();
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidNotification(request.resource.data) && 
+                    (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && 
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

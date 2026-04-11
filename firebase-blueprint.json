@@ -1,0 +1,107 @@
+{
+  "entities": {
+    "Tenant": {
+      "title": "Tenant",
+      "description": "A business entity or client using the platform.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the company." },
+        "plan": { "type": "string", "enum": ["starter", "pro", "enterprise"], "description": "The subscription plan." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the tenant was created." },
+        "stripeCustomerId": { "type": "string", "description": "Stripe customer ID for billing." }
+      },
+      "required": ["name", "plan", "createdAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user belonging to a tenant.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email", "description": "User's email address." },
+        "tenantId": { "type": "string", "description": "The ID of the tenant this user belongs to." },
+        "role": { "type": "string", "enum": ["admin", "manager", "user"], "description": "User's role within the tenant." },
+        "displayName": { "type": "string", "description": "User's display name." },
+        "photoURL": { "type": "string", "description": "User's profile picture URL." }
+      },
+      "required": ["email", "tenantId", "role"]
+    },
+    "Client": {
+      "title": "Client",
+      "description": "A client of the tenant.",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "description": "The ID of the tenant this client belongs to." },
+        "name": { "type": "string", "description": "Client's name." },
+        "industry": { "type": "string", "description": "Client's industry." },
+        "email": { "type": "string", "format": "email", "description": "Client's contact email." }
+      },
+      "required": ["tenantId", "name"]
+    },
+    "Job": {
+      "title": "Job",
+      "description": "An asynchronous AI task.",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "description": "The ID of the tenant this job belongs to." },
+        "type": { "type": "string", "description": "Type of AI agent (marketing, sales, etc.)." },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed", "failed"], "description": "Current status of the job." },
+        "input": { "type": "object", "description": "Input data for the AI agent." },
+        "result": { "type": "object", "description": "Output result from the AI agent." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the job was created." }
+      },
+      "required": ["tenantId", "type", "status", "createdAt"]
+    },
+    "Content": {
+      "title": "Content",
+      "description": "AI generated content.",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "description": "The ID of the tenant." },
+        "type": { "type": "string", "description": "Type of content (email, post, report)." },
+        "data": { "type": "object", "description": "The content data." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the content was generated." }
+      },
+      "required": ["tenantId", "type", "data", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System notification for a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The ID of the user." },
+        "title": { "type": "string", "description": "Notification title." },
+        "message": { "type": "string", "description": "Notification message." },
+        "type": { "type": "string", "enum": ["info", "success", "warning", "error"], "description": "Type of notification." },
+        "read": { "type": "boolean", "description": "Whether the notification has been read." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the notification was created." }
+      },
+      "required": ["userId", "title", "message", "type", "read", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/tenants/{tenantId}": {
+      "schema": "Tenant",
+      "description": "Root collection for tenants."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and tenant association."
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Clients managed by tenants."
+    },
+    "/jobs/{jobId}": {
+      "schema": "Job",
+      "description": "AI background jobs."
+    },
+    "/content/{contentId}": {
+      "schema": "Content",
+      "description": "Generated content assets."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "System notifications for users."
+    }
+  }
+}

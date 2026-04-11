@@ -1,0 +1,9 @@
+flask
+flask-sqlalchemy
+flask-jwt-extended
+anthropic
+python-dotenv
+gunicorn
+rq
+redis
+psycopg2-binary
