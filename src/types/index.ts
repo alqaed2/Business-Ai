@@ -8,6 +8,8 @@ export interface Tenant {
   plan: SubscriptionPlan;
   createdAt: string;
   stripeCustomerId?: string;
+  serverUrl?: string;
+  apiKey?: string;
 }
 
 export interface UserProfile {

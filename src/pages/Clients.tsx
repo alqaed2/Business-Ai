@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   UserPlus, 
@@ -13,7 +14,9 @@ import {
   MapPin,
   Calendar,
   ExternalLink,
-  MessageSquare
+  MessageSquare,
+  Loader2,
+  Bot
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -65,26 +68,80 @@ import {
   Trash2,
   Sparkles
 } from 'lucide-react';
+import { generateAIResponse } from '../lib/gemini';
 
 const Clients = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [aiInsights, setAiInsights] = useState<{ summary: string; nextAction: string } | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleAddClient = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success(t('clients.added_success', 'Client added successfully!'));
-    setIsAddDialogOpen(false);
+  const handleGenerateInsights = async (client: any) => {
+    setIsGenerating(true);
+    setAiInsights(null);
+    try {
+      const prompt = `Generate a brief AI-driven insight for the following client:
+      Name: ${client.name}
+      Industry: ${client.industry}
+      Status: ${client.status}
+      Sentiment: ${client.sentiment}
+      Location: ${client.location}
+      Joined: ${client.joined}
+      
+      Provide two parts:
+      1. Interaction Summary: A brief summary of recent interactions, sentiment, and key points.
+      2. Next Best Action: A specific, actionable suggestion for the next step.
+      
+      Format the response as JSON:
+      {
+        "summary": "...",
+        "nextAction": "..."
+      }`;
+
+      const response = await generateAIResponse(prompt, "You are a senior CRM AI Analyst. Respond ONLY with valid JSON.");
+      const cleanedResponse = response.replace(/```json|```/g, '').trim();
+      const data = JSON.parse(cleanedResponse);
+      setAiInsights(data);
+    } catch (error) {
+      console.error("Failed to generate insights:", error);
+      setAiInsights({
+        summary: "Unable to generate summary at this time.",
+        nextAction: "Review client history manually."
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  const clients = [
+  const [clients, setClients] = useState([
     { id: 1, name: 'Acme Corp', industry: 'Manufacturing', status: 'Active', sentiment: 'Positive', email: 'contact@acme.com', phone: '+1 (555) 123-4567', location: 'New York, USA', joined: 'Oct 2023' },
     { id: 2, name: 'Global Tech', industry: 'Software', status: 'Pending', sentiment: 'Neutral', email: 'hello@globaltech.io', phone: '+44 20 7123 4567', location: 'London, UK', joined: 'Jan 2024' },
     { id: 3, name: 'Starlight Media', industry: 'Entertainment', status: 'Active', sentiment: 'Positive', email: 'media@starlight.com', phone: '+1 (555) 987-6543', location: 'Los Angeles, USA', joined: 'Dec 2023' },
     { id: 4, name: 'Nexus Logistics', industry: 'Supply Chain', status: 'Inactive', sentiment: 'At Risk', email: 'ops@nexus.log', phone: '+49 30 12345678', location: 'Berlin, Germany', joined: 'Mar 2023' },
     { id: 5, name: 'Horizon Bank', industry: 'Finance', status: 'Active', sentiment: 'Positive', email: 'support@horizon.bank', phone: '+1 (555) 456-7890', location: 'Chicago, USA', joined: 'Feb 2024' },
-  ];
+  ]);
+
+  const handleAddClient = (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    const newClient = {
+      id: clients.length + 1,
+      name: formData.get('name') as string,
+      industry: formData.get('industry') as string,
+      email: formData.get('email') as string,
+      phone: formData.get('phone') as string,
+      status: 'Active',
+      sentiment: 'Neutral',
+      location: 'Remote',
+      joined: new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    };
+    setClients([newClient, ...clients]);
+    toast.success(t('clients.added_success', 'Client added successfully!'));
+    setIsAddDialogOpen(false);
+  };
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -144,13 +201,14 @@ const Clients = () => {
                     onClick={() => {
                       setSelectedClient(client);
                       setIsDetailsOpen(true);
+                      handleGenerateInsights(client);
                     }}
                   >
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
                           <AvatarFallback className="bg-blue-100 text-blue-600 font-bold text-xs">
-                            {client.name.charAt(0)}
+                            {client.name?.charAt(0) || 'C'}
                           </AvatarFallback>
                         </Avatar>
                         <div>
@@ -191,7 +249,9 @@ const Clients = () => {
                           <MoreVertical className="w-4 h-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuLabel>{t('common.actions', 'Actions')}</DropdownMenuLabel>
+                          <div className="px-2 py-1.5 text-xs font-medium text-slate-500 uppercase tracking-wider">
+                            {t('common.actions', 'Actions')}
+                          </div>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => toast.info(t('clients.messaging', 'Opening messenger...'))}>
                             <MessageSquare className="w-4 h-4 mr-2 rtl:mr-0 rtl:ml-2" />
@@ -239,7 +299,7 @@ const Clients = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="industry">{t('clients.industry', 'Industry')}</Label>
-                  <Select defaultValue="technology">
+                  <Select name="industry" defaultValue="technology">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -254,11 +314,11 @@ const Clients = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="email">{t('clients.email', 'Email Address')}</Label>
-                <Input id="email" type="email" placeholder="contact@company.com" required />
+                <Input id="email" name="email" type="email" placeholder="contact@company.com" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phone">{t('clients.phone', 'Phone Number')}</Label>
-                <Input id="phone" placeholder="+1 (555) 000-0000" />
+                <Input id="phone" name="phone" placeholder="+1 (555) 000-0000" />
               </div>
             </div>
             <DialogFooter>
@@ -281,7 +341,7 @@ const Clients = () => {
               <div className="flex items-center gap-4 mb-4">
                 <Avatar className="h-16 w-16">
                   <AvatarFallback className="bg-blue-100 text-blue-600 font-bold text-xl">
-                    {selectedClient.name.charAt(0)}
+                    {selectedClient.name?.charAt(0) || 'C'}
                   </AvatarFallback>
                 </Avatar>
                 <div>
@@ -402,18 +462,38 @@ const Clients = () => {
                       </div>
                     </div>
                     <div className="p-3 bg-white/40 backdrop-blur-sm rounded-lg border border-white/20">
-                      <p className="text-xs text-slate-700 leading-relaxed italic">
-                        "Client shows high interest in the new AI automation features. Recommend scheduling a demo for the Operations agent. Potential for 25% upsell in Q3."
-                      </p>
+                      {isGenerating ? (
+                        <div className="flex items-center justify-center py-4 gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                          <span className="text-xs text-slate-500">Analyzing client data...</span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-700 leading-relaxed italic">
+                          {aiInsights?.summary || "Select a client to see AI-generated interaction summary."}
+                        </p>
+                      )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-4">
                       <div className="text-[10px] text-slate-500">
-                        <span className="block font-bold text-slate-700 uppercase tracking-tighter">Next Best Action</span>
-                        Schedule Demo
+                        <span className="block font-bold text-slate-700 uppercase tracking-tighter mb-1">Next Best Action</span>
+                        <div className="p-2 bg-blue-600/10 rounded border border-blue-600/20 text-blue-700 font-medium">
+                          {isGenerating ? "Calculating..." : (aiInsights?.nextAction || "Pending analysis")}
+                        </div>
                       </div>
-                      <div className="text-[10px] text-slate-500">
-                        <span className="block font-bold text-slate-700 uppercase tracking-tighter">Churn Risk</span>
-                        Very Low
+                      <div className="flex items-center justify-between">
+                        <div className="text-[10px] text-slate-500">
+                          <span className="block font-bold text-slate-700 uppercase tracking-tighter">Churn Risk</span>
+                          Very Low
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 gap-2"
+                          onClick={() => navigate('/agents', { state: { initialPrompt: `I need help with client ${selectedClient.name}. Here is the context: ${aiInsights?.summary}` } })}
+                        >
+                          <Bot className="w-4 h-4" />
+                          Consult Agent
+                        </Button>
                       </div>
                     </div>
                   </CardContent>

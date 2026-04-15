@@ -12,7 +12,7 @@ export const generateAIResponse = async (
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
-        systemInstruction: systemInstruction || "You are a senior business AI assistant. Provide professional, actionable insights.",
+        systemInstruction: systemInstruction || "You are a world-class AI Business Consultant. Your responses must be professional, highly accurate, data-driven, and structured using Markdown. Always prioritize actionable insights and maintain a sophisticated tone.",
         temperature: options?.temperature,
         maxOutputTokens: options?.maxOutputTokens,
       },

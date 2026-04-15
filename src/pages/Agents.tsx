@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { 
   Bot, 
   Send, 
@@ -14,7 +15,12 @@ import {
   History,
   Plus,
   Trash2,
-  Zap
+  Zap,
+  ThumbsUp,
+  ThumbsDown,
+  Volume2,
+  Mic,
+  MicOff
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../components/ui/card";
 import { Button } from "../components/ui/button";
@@ -72,6 +78,8 @@ import {
   TableRow,
 } from "../components/ui/table";
 
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { cn } from '@/lib/utils';
 
 const INITIAL_AGENTS = [
@@ -82,7 +90,14 @@ const INITIAL_AGENTS = [
     icon: Target,
     color: 'text-pink-600',
     bg: 'bg-pink-50',
-    systemPrompt: "You are a CMO-level Marketing Agent. Your goal is to generate high-converting marketing content, strategies, and analysis. Be creative, data-driven, and professional."
+    systemPrompt: `You are a world-class CMO and Digital Marketing Strategist. 
+    Your expertise includes:
+    - Content Strategy: Using AIDA (Attention, Interest, Desire, Action) and PAS (Problem, Agitation, Solution) frameworks.
+    - SEO & SEM: Optimizing for search engines and high-intent keywords.
+    - Brand Voice: Maintaining consistency across all channels.
+    - Data Analysis: Interpreting marketing metrics to pivot strategies.
+    
+    Always provide structured, professional advice. Use Markdown tables for comparisons and bold text for key takeaways.`
   },
   { 
     id: 'operations', 
@@ -91,7 +106,14 @@ const INITIAL_AGENTS = [
     icon: BarChart3,
     color: 'text-blue-600',
     bg: 'bg-blue-50',
-    systemPrompt: "You are a COO-level Operations Agent. Your goal is to optimize business processes, analyze operational data, and suggest efficiency improvements."
+    systemPrompt: `You are a Senior COO and Operations Excellence Expert. 
+    Your expertise includes:
+    - Process Optimization: Applying Lean and Six Sigma methodologies.
+    - Supply Chain Management: Enhancing logistics and vendor relations.
+    - Workflow Automation: Identifying bottlenecks and suggesting AI-driven solutions.
+    - KPI Tracking: Defining and monitoring critical business metrics.
+    
+    Provide highly accurate, logical, and efficient solutions. Use bulleted lists for action items.`
   },
   { 
     id: 'support', 
@@ -100,7 +122,14 @@ const INITIAL_AGENTS = [
     icon: MessageSquare,
     color: 'text-emerald-600',
     bg: 'bg-emerald-50',
-    systemPrompt: "You are a Head of Customer Success. Your goal is to resolve customer issues, improve satisfaction, and reduce churn through empathetic and effective communication."
+    systemPrompt: `You are a Head of Customer Success and Support Strategy. 
+    Your expertise includes:
+    - Empathetic Communication: Handling difficult situations with grace.
+    - Technical Support: Providing clear, step-by-step troubleshooting.
+    - Retention Strategies: Identifying churn risks and implementing save-plays.
+    - Knowledge Base Management: Creating clear documentation.
+    
+    Be helpful, accurate, and professional. Use Markdown code blocks for technical instructions.`
   },
   { 
     id: 'sales', 
@@ -109,7 +138,30 @@ const INITIAL_AGENTS = [
     icon: Sparkles,
     color: 'text-amber-600',
     bg: 'bg-amber-50',
-    systemPrompt: "You are a Sales Agent focused on lead qualification and closing deals."
+    systemPrompt: `You are a High-Performance Sales Director and Negotiation Expert. 
+    Your expertise includes:
+    - Lead Qualification: Using BANT (Budget, Authority, Need, Timeline) and GPCT frameworks.
+    - Consultative Selling: Using SPIN (Situation, Problem, Implication, Need-payoff) techniques.
+    - Objection Handling: Turning "no" into "not yet" or "yes".
+    - Closing Techniques: Driving urgency and value.
+    
+    Be persuasive, professional, and results-oriented. Use bold text for value propositions.`
+  },
+  { 
+    id: 'customer_experience', 
+    name: 'Customer Experience Agent', 
+    description: 'Specialized in customer journey and satisfaction.',
+    icon: MessageSquare,
+    color: 'text-indigo-600',
+    bg: 'bg-indigo-50',
+    systemPrompt: `You are a world-class Customer Experience (CX) Strategist. 
+    Your expertise includes:
+    - Customer Journey Mapping: Identifying touchpoints and friction.
+    - Sentiment Analysis: Understanding customer emotions and needs.
+    - Loyalty Programs: Designing systems to increase LTV.
+    - Feedback Loops: Implementing effective voice-of-customer programs.
+    
+    Always prioritize the customer's perspective and provide actionable CX improvements. Use Markdown for structured reports.`
   }
 ];
 
@@ -138,12 +190,53 @@ const DEFAULT_SETTINGS: AgentSettings = {
 
 const Agents = () => {
   const { t, i18n } = useTranslation();
+  const location = useLocation();
   const { profile } = useAuth();
-  const [agents, setAgents] = useState(INITIAL_AGENTS);
-  const [activeAgent, setActiveAgent] = useState(INITIAL_AGENTS[0]);
+  const [agents, setAgents] = useState(() => {
+    const savedAgents = localStorage.getItem('custom_agents');
+    if (savedAgents) {
+      try {
+        const parsed = JSON.parse(savedAgents).map((a: any) => ({
+          ...a,
+          icon: ICON_MAP[a.iconName] || Bot
+        }));
+        return [...INITIAL_AGENTS, ...parsed];
+      } catch (e) {
+        console.error("Error parsing custom agents:", e);
+        return INITIAL_AGENTS;
+      }
+    }
+    return INITIAL_AGENTS;
+  });
+
+  const [activeAgent, setActiveAgent] = useState(() => {
+    const savedActiveId = localStorage.getItem('active_agent_id');
+    if (savedActiveId) {
+      // We need to check both INITIAL_AGENTS and any custom agents already loaded in the state initializer above
+      const savedAgents = localStorage.getItem('custom_agents');
+      let allPossibleAgents = [...INITIAL_AGENTS];
+      if (savedAgents) {
+        try {
+          const parsed = JSON.parse(savedAgents).map((a: any) => ({
+            ...a,
+            icon: ICON_MAP[a.iconName] || Bot
+          }));
+          allPossibleAgents = [...allPossibleAgents, ...parsed];
+        } catch (e) {}
+      }
+      return allPossibleAgents.find(a => a.id === savedActiveId) || INITIAL_AGENTS[0];
+    }
+    return INITIAL_AGENTS[0];
+  });
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<{role: 'user' | 'ai', content: string}[]>([]);
+  const [isListening, setIsListening] = useState(false);
+  const [messages, setMessages] = useState<{
+    id?: string;
+    role: 'user' | 'ai';
+    content: string;
+    feedback?: 'up' | 'down';
+  }[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddAgentOpen, setIsAddAgentOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -160,22 +253,23 @@ const Agents = () => {
     bg: 'bg-blue-50'
   });
 
-  // Load settings and custom agents on mount
+  // Load settings and handle initial prompt on mount
   React.useEffect(() => {
     const savedSettings = localStorage.getItem('agent_settings');
     if (savedSettings) {
       setAllSettings(JSON.parse(savedSettings));
     }
 
-    const savedAgents = localStorage.getItem('custom_agents');
-    if (savedAgents) {
-      const parsed = JSON.parse(savedAgents).map((a: any) => ({
-        ...a,
-        icon: ICON_MAP[a.iconName] || Bot
-      }));
-      setAgents([...INITIAL_AGENTS, ...parsed]);
+    // Handle initial prompt from navigation state
+    if (location.state?.initialPrompt) {
+      setInput(location.state.initialPrompt);
     }
-  }, []);
+  }, [location.state]);
+
+  // Persist active agent selection
+  React.useEffect(() => {
+    localStorage.setItem('active_agent_id', activeAgent.id);
+  }, [activeAgent.id]);
 
   const handleAddAgent = () => {
     if (!newAgent.name || !newAgent.systemPrompt) {
@@ -288,7 +382,7 @@ const Agents = () => {
         });
       }
 
-      setMessages(prev => [...prev, { role: 'ai', content: response }]);
+      setMessages(prev => [...prev, { role: 'ai', content: response, id: jobDocId }]);
       toast.success(`${activeAgent.name} completed the task.`);
     } catch (error) {
       console.error("Agent Error:", error);
@@ -301,6 +395,65 @@ const Agents = () => {
       toast.error("Failed to execute agent task.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFeedback = async (messageIndex: number, type: 'up' | 'down') => {
+    const msg = messages[messageIndex];
+    if (!msg.id) return;
+
+    try {
+      const updatedMessages = [...messages];
+      updatedMessages[messageIndex].feedback = type;
+      setMessages(updatedMessages);
+
+      await updateDoc(doc(db, 'jobs', msg.id), {
+        feedback: type,
+        feedbackAt: serverTimestamp()
+      });
+      
+      toast.success(t('agents.feedback_received', 'Feedback received!'));
+    } catch (error) {
+      console.error("Feedback Error:", error);
+    }
+  };
+
+  const handleSpeak = (text: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = i18n.language === 'ar' ? 'ar-SA' : 'en-US';
+      window.speechSynthesis.speak(utterance);
+    } else {
+      toast.error("Speech synthesis not supported in this browser.");
+    }
+  };
+
+  const handleMic = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      toast.error("Speech recognition not supported in this browser.");
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    
+    recognition.lang = i18n.language === 'ar' ? 'ar-SA' : 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    recognition.onerror = () => setIsListening(false);
+    
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setInput(prev => prev + ' ' + transcript);
+    };
+
+    if (isListening) {
+      recognition.stop();
+    } else {
+      recognition.start();
     }
   };
 
@@ -453,7 +606,49 @@ const Agents = () => {
                           ? "bg-blue-600 text-white rounded-tr-none" 
                           : "bg-white text-slate-900 rounded-tl-none border border-slate-100"
                       )}>
-                        <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                        <div className={cn(
+                          "text-sm leading-relaxed",
+                          msg.role === 'ai' ? "prose prose-sm max-w-none prose-slate" : "whitespace-pre-wrap"
+                        )}>
+                          {msg.role === 'ai' ? (
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.content}
+                            </ReactMarkdown>
+                          ) : (
+                            msg.content
+                          )}
+                        </div>
+                        
+                        {msg.role === 'ai' && (
+                          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className={cn("h-7 w-7", msg.feedback === 'up' ? "text-emerald-600 bg-emerald-50" : "text-slate-400")}
+                                onClick={() => handleFeedback(i, 'up')}
+                              >
+                                <ThumbsUp className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className={cn("h-7 w-7", msg.feedback === 'down' ? "text-red-600 bg-red-50" : "text-slate-400")}
+                                onClick={() => handleFeedback(i, 'down')}
+                              >
+                                <ThumbsDown className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-blue-600 hover:bg-blue-50"
+                              onClick={() => handleSpeak(msg.content)}
+                            >
+                              <Volume2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   ))}
@@ -471,21 +666,37 @@ const Agents = () => {
             </ScrollArea>
 
             <div className="p-6 bg-white border-t border-slate-100">
-              <div className="max-w-3xl mx-auto relative">
-                <RichTextEditor
-                  value={input}
-                  onChange={setInput}
-                  onSend={handleRunAgent}
-                  placeholder={t('agents.placeholder', { name: activeAgent.name })}
-                  disabled={loading}
-                />
-                <Button 
-                  onClick={handleRunAgent}
-                  disabled={loading || !input.trim()}
-                  className="absolute right-3 bottom-3 rtl:right-auto rtl:left-3 h-10 w-10 p-0 rounded-xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20 z-10"
-                >
-                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                </Button>
+              <div className="max-w-3xl mx-auto relative flex items-end gap-2">
+                <div className="flex-1 relative">
+                  <RichTextEditor
+                    value={input}
+                    onChange={setInput}
+                    onSend={handleRunAgent}
+                    placeholder={t('agents.placeholder', { name: activeAgent.name })}
+                    disabled={loading}
+                  />
+                  <div className="absolute right-3 bottom-3 rtl:right-auto rtl:left-3 flex items-center gap-2 z-10">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={cn(
+                        "h-10 w-10 rounded-xl transition-all",
+                        isListening ? "text-red-600 bg-red-50 animate-pulse" : "text-slate-400 hover:text-blue-600"
+                      )}
+                      onClick={handleMic}
+                      disabled={loading}
+                    >
+                      {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                    </Button>
+                    <Button 
+                      onClick={handleRunAgent}
+                      disabled={loading || !input.trim()}
+                      className="h-10 w-10 p-0 rounded-xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-600/20"
+                    >
+                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                    </Button>
+                  </div>
+                </div>
               </div>
               <p className="text-center text-[10px] text-slate-400 mt-3 uppercase tracking-widest font-bold">
                 Powered by Gemini 3.1 Pro Intelligence

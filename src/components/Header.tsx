@@ -178,14 +178,12 @@ const Header = ({ onMenuClick }: { onMenuClick?: () => void }) => {
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>
-                <div className="flex flex-col">
-                  <span>{profile?.displayName}</span>
-                  <span className="text-xs font-normal text-slate-500">{profile?.email}</span>
-                </div>
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
+            <div className="px-2 py-1.5">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">{profile?.displayName}</span>
+                <span className="text-xs font-normal text-slate-500">{profile?.email}</span>
+              </div>
+            </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate('/settings')}>
               <UserIcon className="mr-2 rtl:mr-0 rtl:ml-2 h-4 w-4" />

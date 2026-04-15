@@ -51,19 +51,52 @@ const Workflows = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<any>(null);
-
-  const handleCreateWorkflow = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast.success(t('workflows.created_success', 'Workflow created successfully!'));
-    setIsCreateOpen(false);
-  };
-
-  const workflows = [
+  const [workflows, setWorkflows] = useState([
     { id: 1, name: 'Lead Enrichment Pipeline', status: 'Active', triggers: 'New Lead', agents: 2, lastRun: '10m ago', successRate: '98%', avgTime: '45s' },
     { id: 2, name: 'Weekly Content Calendar', status: 'Scheduled', triggers: 'Every Monday', agents: 3, lastRun: '4d ago', successRate: '100%', avgTime: '12m' },
     { id: 3, name: 'Customer Sentiment Monitor', status: 'Active', triggers: 'New Review', agents: 1, lastRun: '1h ago', successRate: '95%', avgTime: '5s' },
     { id: 4, name: 'Revenue Anomaly Detection', status: 'Paused', triggers: 'Hourly', agents: 2, lastRun: '2d ago', successRate: '92%', avgTime: '1.2m' },
-  ];
+  ]);
+
+  const [availableAgents, setAvailableAgents] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    const INITIAL_AGENTS = [
+      { id: 'marketing', name: 'Marketing Agent' },
+      { id: 'operations', name: 'Operations Agent' },
+      { id: 'support', name: 'Support Agent' },
+      { id: 'sales', name: 'Sales Agent' },
+      { id: 'customer_experience', name: 'Customer Experience Agent' }
+    ];
+    const savedAgents = localStorage.getItem('custom_agents');
+    if (savedAgents) {
+      const parsed = JSON.parse(savedAgents);
+      setAvailableAgents([...INITIAL_AGENTS, ...parsed]);
+    } else {
+      setAvailableAgents(INITIAL_AGENTS);
+    }
+  }, []);
+
+  const handleCreateWorkflow = (e: React.FormEvent) => {
+    e.preventDefault();
+    const formData = new FormData(e.target as HTMLFormElement);
+    const selectedAgentCheckboxes = (e.target as HTMLFormElement).querySelectorAll('input[type="checkbox"]:checked');
+    
+    const newWorkflow = {
+      id: workflows.length + 1,
+      name: formData.get('name') as string,
+      status: 'Active',
+      triggers: formData.get('trigger') as string,
+      agents: selectedAgentCheckboxes.length,
+      lastRun: 'Never',
+      successRate: '0%',
+      avgTime: '0s'
+    };
+    
+    setWorkflows([newWorkflow, ...workflows]);
+    toast.success(t('workflows.created_success', 'Workflow created successfully!'));
+    setIsCreateOpen(false);
+  };
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -156,12 +189,12 @@ const Workflows = () => {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label htmlFor="wf-name">{t('workflows.name', 'Workflow Name')}</Label>
-                <Input id="wf-name" placeholder="e.g. Daily Sales Report" required />
+                <Input id="wf-name" name="name" placeholder="e.g. Daily Sales Report" required />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="trigger">{t('workflows.trigger', 'Trigger Type')}</Label>
-                  <Select defaultValue="webhook">
+                  <Select name="trigger" defaultValue="webhook">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -174,7 +207,7 @@ const Workflows = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="priority">{t('workflows.priority', 'Priority')}</Label>
-                  <Select defaultValue="medium">
+                  <Select name="priority" defaultValue="medium">
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -188,12 +221,12 @@ const Workflows = () => {
               </div>
               <div className="space-y-2">
                 <Label>{t('workflows.select_agents', 'Select Agents')}</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {['Marketing', 'Sales', 'Operations', 'Support'].map(agent => (
-                    <div key={agent} className="flex items-center space-x-2 p-2 rounded border border-slate-100 hover:bg-slate-50 cursor-pointer">
-                      <input type="checkbox" id={`agent-${agent}`} className="rounded border-slate-300" />
-                      <label htmlFor={`agent-${agent}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                        {agent}
+                <div className="grid grid-cols-2 gap-2 max-h-[150px] overflow-y-auto p-1">
+                  {availableAgents.map(agent => (
+                    <div key={agent.id} className="flex items-center space-x-2 p-2 rounded border border-slate-100 hover:bg-slate-50 cursor-pointer">
+                      <input type="checkbox" id={`agent-${agent.id}`} name="agents" value={agent.id} className="rounded border-slate-300" />
+                      <label htmlFor={`agent-${agent.id}`} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                        {agent.name}
                       </label>
                     </div>
                   ))}

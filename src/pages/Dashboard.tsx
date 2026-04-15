@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   TrendingUp, 
@@ -16,7 +16,8 @@ import {
   ShieldCheck,
   Cpu,
   Globe,
-  Server
+  Server,
+  Bot
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -37,6 +38,11 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { cn } from '../lib/utils';
+import { db } from '../lib/firebase';
+import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { useAuth } from '../components/AuthProvider';
+import { formatDistanceToNow } from 'date-fns';
+import { ar, enUS } from 'date-fns/locale';
 
 const data = [
   { name: 'Mon', value: 400, active: 240 },
@@ -61,12 +67,43 @@ const healthData = Array.from({ length: 48 }, (_, i) => ({
 }));
 
 const Dashboard = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { profile } = useAuth();
+  const [recentJobs, setRecentJobs] = useState<any[]>([]);
+  const [statsData, setStatsData] = useState({
+    totalOps: 0,
+    activeAgents: 5,
+    roi: 42.5,
+    hoursSaved: 142
+  });
+
+  useEffect(() => {
+    if (!profile) return;
+
+    const q = query(
+      collection(db, 'jobs'),
+      where('tenantId', '==', profile.tenantId),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const jobs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setRecentJobs(jobs);
+    }, (error) => {
+      console.error("Dashboard Jobs Fetch Error:", error);
+    });
+
+    return () => unsubscribe();
+  }, [profile?.tenantId]);
 
   const stats = [
     { 
       label: t('dashboard.stats.ops'), 
-      value: '12,482', 
+      value: (statsData.totalOps + 12482).toLocaleString(), 
       change: '+12.5%', 
       isPositive: true,
       icon: Zap, 
@@ -76,7 +113,7 @@ const Dashboard = () => {
     },
     { 
       label: t('dashboard.stats.agents'), 
-      value: '8', 
+      value: statsData.activeAgents.toString(), 
       change: '+2', 
       isPositive: true,
       icon: Activity, 
@@ -86,7 +123,7 @@ const Dashboard = () => {
     },
     { 
       label: t('dashboard.stats.roi'), 
-      value: '$42.5k', 
+      value: `$${statsData.roi}k`, 
       change: '+18.2%', 
       isPositive: true,
       icon: TrendingUp, 
@@ -96,7 +133,7 @@ const Dashboard = () => {
     },
     { 
       label: t('dashboard.stats.saved'), 
-      value: '142h', 
+      value: `${statsData.hoursSaved}h`, 
       change: '-5.1%', 
       isPositive: false,
       icon: Clock, 
@@ -105,6 +142,29 @@ const Dashboard = () => {
       description: 'Human hours automated'
     },
   ];
+
+  const getAgentColor = (agentId: string) => {
+    const id = agentId.toLowerCase();
+    if (id.includes('marketing')) return { color: 'text-pink-600', bg: 'bg-pink-50', border: 'border-pink-100' };
+    if (id.includes('sales')) return { color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' };
+    if (id.includes('operations')) return { color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' };
+    if (id.includes('support')) return { color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' };
+    if (id.includes('experience') || id.includes('cx')) return { color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-100' };
+    return { color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-100' };
+  };
+
+  const formatTime = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      return formatDistanceToNow(date, { 
+        addSuffix: true,
+        locale: i18n.language === 'ar' ? ar : enUS
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
   return (
     <div className="space-y-8 pb-10">
@@ -384,35 +444,54 @@ const Dashboard = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {[
-                    { name: 'Marketing Analysis', agent: 'Marketing', status: 'Completed', duration: '1.2s', time: '2m ago', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-                    { name: 'Sales Outreach', agent: 'Sales', status: 'Processing', duration: '-', time: 'Just now', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-                    { name: 'Customer Support', agent: 'Support', status: 'Pending', duration: '-', time: '5m ago', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200' },
-                    { name: 'Revenue Forecast', agent: 'Operations', status: 'Completed', duration: '0.8s', time: '12m ago', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-                    { name: 'Churn Prediction', agent: 'Operations', status: 'Failed', duration: '2.4s', time: '20m ago', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100' },
-                  ].map((job, i) => (
-                    <tr key={i} className="group hover:bg-slate-50/80 transition-colors cursor-pointer">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className={cn("w-1 h-8 rounded-full", job.bg.replace('bg-', 'bg-').replace('-50', '-500'))}></div>
-                          <span className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{job.name}</span>
-                        </div>
+                  {recentJobs.length > 0 ? recentJobs.map((job, i) => {
+                    const style = getAgentColor(job.type);
+                    return (
+                      <tr key={job.id || i} className="group hover:bg-slate-50/80 transition-colors cursor-pointer">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className={cn("w-1 h-8 rounded-full", style.bg.replace('bg-', 'bg-').replace('-50', '-500'))}></div>
+                            <span className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                              {job.input?.prompt?.substring(0, 30)}...
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="outline" className="bg-white text-slate-500 border-slate-200 font-bold text-[10px] uppercase tracking-tighter">
+                            {job.type}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className={cn(
+                            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border", 
+                            job.status === 'completed' ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
+                            job.status === 'failed' ? "bg-red-50 text-red-600 border-red-100" :
+                            "bg-blue-50 text-blue-600 border-blue-100"
+                          )}>
+                            <span className={cn(
+                              "w-1 h-1 rounded-full", 
+                              job.status === 'completed' ? "bg-emerald-500" :
+                              job.status === 'failed' ? "bg-red-500" :
+                              "bg-blue-500 animate-pulse"
+                            )}></span>
+                            {job.status}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-xs text-slate-500 font-mono font-medium">
+                          {job.completedAt && job.createdAt ? 
+                            `${((new Date(job.completedAt).getTime() - new Date(job.createdAt).getTime()) / 1000).toFixed(1)}s` : 
+                            '-'}
+                        </td>
+                        <td className="px-6 py-4 text-xs text-slate-400 text-right font-medium">{formatTime(job.createdAt)}</td>
+                      </tr>
+                    );
+                  }) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-10 text-center text-slate-400 italic text-sm">
+                        No recent operations found. Start a task with an agent to see logs.
                       </td>
-                      <td className="px-6 py-4">
-                        <Badge variant="outline" className="bg-white text-slate-500 border-slate-200 font-bold text-[10px] uppercase tracking-tighter">
-                          {job.agent}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border", job.bg, job.color, job.border)}>
-                          <span className={cn("w-1 h-1 rounded-full animate-pulse", job.color.replace('text', 'bg'))}></span>
-                          {job.status}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-xs text-slate-500 font-mono font-medium">{job.duration}</td>
-                      <td className="px-6 py-4 text-xs text-slate-400 text-right font-medium">{job.time}</td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
